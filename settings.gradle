@@ -1,0 +1,3 @@
+include ':stackexpandableview'
+include ':app'
+rootProject.name = "StackExpandableView"

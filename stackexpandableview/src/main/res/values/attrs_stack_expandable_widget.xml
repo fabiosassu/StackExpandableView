@@ -1,0 +1,11 @@
+<resources>
+    <declare-styleable name="StackExpandableView">
+        <attr name="shownElements" format="integer" />
+        <attr name="parallaxOffset" format="dimension" />
+        <attr name="animationDuration" format="integer" />
+        <attr name="orientation" format="enum">
+            <enum name="vertical" value="0" />
+            <enum name="horizontal" value="1" />
+        </attr>
+    </declare-styleable>
+</resources>
