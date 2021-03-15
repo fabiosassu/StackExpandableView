@@ -51,7 +51,7 @@ You can customize some aspects of this view:
 - the `orientation` parameter is be used to specify the direction of the expansion It can be either `vertical` or `horizontal`. By default is `vertical`.
 - the `animationDuration` parameter is used to define the duration of the animation in milliseconds. By default, is 300 milliseconds.
 - the `shownElements` parameter is used to define how many elements we want to be shown. By default, is 3 elements.
-- the `parallaxOffset` parameter is used to define the spacing betwen the underlying objects in dp. By default, is 8dp.
+- the `parallaxOffset` parameter is used to define the spacing between the underlying objects in dp. By default, is 8dp.
 
 At runtime, you can set/add/remove a list of Views using the related methods
 
