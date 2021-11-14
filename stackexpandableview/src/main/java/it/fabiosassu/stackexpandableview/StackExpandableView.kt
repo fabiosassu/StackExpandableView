@@ -3,19 +3,30 @@ package it.fabiosassu.stackexpandableview
 import android.content.Context
 import android.util.AttributeSet
 import android.util.TypedValue
+import android.util.TypedValue.COMPLEX_UNIT_DIP
 import android.view.View
+import android.view.View.OnClickListener
 import android.view.ViewTreeObserver.OnGlobalLayoutListener
 import androidx.annotation.IntDef
 import androidx.constraintlayout.motion.widget.MotionLayout
+import androidx.constraintlayout.motion.widget.MotionScene
+import androidx.constraintlayout.motion.widget.TransitionBuilder
 import androidx.constraintlayout.widget.ConstraintSet
+import androidx.constraintlayout.widget.ConstraintSet.*
+import androidx.core.view.ViewCompat
+import kotlin.annotation.AnnotationRetention.SOURCE
 
 /**
  * A view that allows to perform an iOS notification group like animation.
  *
  * @author fabiosassu
- * @version 1.0.0
+ * @version 1.0.1
  */
-class StackExpandableView : MotionLayout, View.OnClickListener {
+class StackExpandableView @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyle: Int = 0
+) : MotionLayout(context, attrs, defStyle), OnClickListener {
 
     @Orientation
     var orientation = VERTICAL
@@ -30,32 +41,19 @@ class StackExpandableView : MotionLayout, View.OnClickListener {
     private var isCollapsed = true
     private val maxTranslation: Float
         get() = TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_DIP,
+            COMPLEX_UNIT_DIP,
             parallaxValue,
             resources.displayMetrics
         ) * shownElements
+    private var stackTransition: MotionScene.Transition? = null
 
-    constructor(context: Context) : super(context) {
-        init(null, 0)
-    }
-
-    constructor(context: Context, attrs: AttributeSet) : super(context, attrs) {
-        init(attrs, 0)
-    }
-
-    constructor(context: Context, attrs: AttributeSet, defStyle: Int) : super(
-        context,
-        attrs,
-        defStyle
-    ) {
+    init {
         init(attrs, defStyle)
     }
 
     private fun init(attrs: AttributeSet?, defStyle: Int) {
-        loadLayoutDescription(R.xml.layout_stack_expandable_widget_scene)
         // Load attributes
-        val a =
-            context.obtainStyledAttributes(attrs, R.styleable.StackExpandableView, defStyle, 0)
+        val a = context.obtainStyledAttributes(attrs, R.styleable.StackExpandableView, defStyle, 0)
         shownElements =
             a.getInt(R.styleable.StackExpandableView_shownElements, DEFAULT_ITEMS_NUMBER)
         parallaxValue =
@@ -74,7 +72,31 @@ class StackExpandableView : MotionLayout, View.OnClickListener {
 
     override fun onFinishInflate() {
         super.onFinishInflate()
+        val scene = MotionScene(this)
+        stackTransition = createTransition(scene)
+        scene.addTransition(stackTransition)
+        scene.setTransition(stackTransition)
+        setScene(scene)
         redraw()
+    }
+
+    /**
+     * Create a basic transition programmatically.
+     */
+    private fun createTransition(scene: MotionScene): MotionScene.Transition {
+        val startSetId = ViewCompat.generateViewId()
+        val startSet = ConstraintSet()
+        startSet.clone(this)
+        val endSetId = ViewCompat.generateViewId()
+        val endSet = ConstraintSet()
+        endSet.clone(this)
+        val transitionId = ViewCompat.generateViewId()
+        return TransitionBuilder.buildTransition(
+            scene,
+            transitionId,
+            startSetId, startSet,
+            endSetId, endSet
+        )
     }
 
     /**
@@ -108,7 +130,7 @@ class StackExpandableView : MotionLayout, View.OnClickListener {
      */
     fun removeWidget(view: View?) {
         view?.let {
-            val index = widgetList.indexOf { it.id == view.id }
+            val index = widgetList.indexOf<Any> { it.id == view.id }
             widgetList.removeAt(index)
             redraw()
         }
@@ -124,101 +146,103 @@ class StackExpandableView : MotionLayout, View.OnClickListener {
     }
 
     private fun rebuildTransition() {
-        val stackTransition = getTransition(R.id.stackTransition)
-        stackTransition.duration = animationDuration
-        if (widgetList.isNotEmpty()) {
-            val startConstraint = getConstraintSet(R.id.startStackConstraintSet)
-            startConstraint.clone(this)
-            val endConstraintSet = getConstraintSet(R.id.endStackConstraintSet)
-            endConstraintSet.clone(this)
-            widgetList.forEachIndexed { index, view ->
-                // set start constraint set
-                val translation = TypedValue.applyDimension(
-                    TypedValue.COMPLEX_UNIT_DIP,
-                    parallaxValue,
-                    resources.displayMetrics
-                ) * index
-                val scale = 1.toFloat() - (index.toFloat() / widgetList.size)
-                when (orientation) {
-                    VERTICAL -> {
-                        startConstraint.setScaleX(view.id, scale)
-                        startConstraint.setTranslationY(view.id, translation)
-                    }
-                    HORIZONTAL -> {
-                        startConstraint.setScaleY(view.id, scale)
-                        startConstraint.setTranslationX(view.id, translation)
-                    }
-                }
-                startConstraint.setAlpha(
-                    view.id,
-                    if (index >= shownElements) 0.toFloat() else 1.toFloat()
-                )
-                // set end constraint set
-                when (orientation) {
-                    VERTICAL -> {
-                        endConstraintSet.setTranslationY(view.id, 0.toFloat())
-                        endConstraintSet.setScaleX(view.id, 1.toFloat())
-                    }
-                    HORIZONTAL -> {
-                        endConstraintSet.setTranslationX(view.id, 0.toFloat())
-                        endConstraintSet.setScaleY(view.id, 1.toFloat())
-                    }
-                }
-                endConstraintSet.setAlpha(view.id, 1.toFloat())
-            }
-            val ids = widgetList.map { it.id }.toIntArray()
-            if (ids.size > 1) {
-                when (orientation) {
-                    VERTICAL -> endConstraintSet.createVerticalChain(
-                        ConstraintSet.PARENT_ID,
-                        ConstraintSet.TOP,
-                        ConstraintSet.PARENT_ID,
-                        ConstraintSet.BOTTOM,
-                        ids,
-                        null,
-                        ConstraintSet.CHAIN_PACKED
-                    )
-                    HORIZONTAL -> {
-                        endConstraintSet.createHorizontalChainRtl(
-                            ConstraintSet.PARENT_ID,
-                            ConstraintSet.START,
-                            ConstraintSet.PARENT_ID,
-                            ConstraintSet.END,
-                            ids,
-                            null,
-                            ConstraintSet.CHAIN_PACKED
-                        )
-                    }
-                }
-            }
-            setTransition(stackTransition)
-            // set the min height
-            viewTreeObserver.addOnGlobalLayoutListener(object : OnGlobalLayoutListener {
-                override fun onGlobalLayout() {
+        stackTransition?.let { transition ->
+            transition.duration = animationDuration
+            if (widgetList.isNotEmpty()) {
+                val startConstraint = getConstraintSet(transition.startConstraintSetId)
+                startConstraint.clone(this)
+                val endConstraintSet = getConstraintSet(transition.endConstraintSetId)
+                endConstraintSet.clone(this)
+                widgetList.forEachIndexed { index, view ->
+                    // set start constraint set
+                    val translation = TypedValue.applyDimension(
+                        COMPLEX_UNIT_DIP,
+                        parallaxValue,
+                        resources.displayMetrics
+                    ) * index
+                    val scale = 1.toFloat() - (index.toFloat() / widgetList.size)
                     when (orientation) {
                         VERTICAL -> {
-                            if (measuredHeight > 0) {
-                                viewTreeObserver.removeOnGlobalLayoutListener(this)
-                            }
-                            val element = if (widgetList.isEmpty()) null else widgetList[0]
-                            minHeight = element?.measuredHeight?.plus(maxTranslation.toInt()) ?: 0
-
+                            startConstraint.setScaleX(view.id, scale)
+                            startConstraint.setTranslationY(view.id, translation)
                         }
                         HORIZONTAL -> {
-                            if (measuredWidth > 0) {
-                                viewTreeObserver.removeOnGlobalLayoutListener(this)
-                            }
-                            val element = if (widgetList.isEmpty()) null else widgetList[0]
-                            minWidth = element?.measuredWidth?.plus(maxTranslation.toInt()) ?: 0
+                            startConstraint.setScaleY(view.id, scale)
+                            startConstraint.setTranslationX(view.id, translation)
                         }
                     }
-
+                    startConstraint.setAlpha(
+                        view.id,
+                        if (index >= shownElements) 0.toFloat() else 1.toFloat()
+                    )
+                    // set end constraint set
+                    when (orientation) {
+                        VERTICAL -> {
+                            endConstraintSet.setTranslationY(view.id, 0.toFloat())
+                            endConstraintSet.setScaleX(view.id, 1.toFloat())
+                        }
+                        HORIZONTAL -> {
+                            endConstraintSet.setTranslationX(view.id, 0.toFloat())
+                            endConstraintSet.setScaleY(view.id, 1.toFloat())
+                        }
+                    }
+                    endConstraintSet.setAlpha(view.id, 1.toFloat())
                 }
-            })
+                val ids = widgetList.map { it.id }.toIntArray()
+                if (ids.size > 1) {
+                    when (orientation) {
+                        VERTICAL -> endConstraintSet.createVerticalChain(
+                            PARENT_ID,
+                            TOP,
+                            PARENT_ID,
+                            BOTTOM,
+                            ids,
+                            null,
+                            CHAIN_PACKED
+                        )
+                        HORIZONTAL -> {
+                            endConstraintSet.createHorizontalChainRtl(
+                                PARENT_ID,
+                                START,
+                                PARENT_ID,
+                                END,
+                                ids,
+                                null,
+                                CHAIN_PACKED
+                            )
+                        }
+                    }
+                }
+                setTransition(transition)
+                // set the min height
+                viewTreeObserver.addOnGlobalLayoutListener(object : OnGlobalLayoutListener {
+                    override fun onGlobalLayout() {
+                        when (orientation) {
+                            VERTICAL -> {
+                                if (measuredHeight > 0) {
+                                    viewTreeObserver.removeOnGlobalLayoutListener(this)
+                                }
+                                val element = if (widgetList.isEmpty()) null else widgetList[0]
+                                minHeight =
+                                    element?.measuredHeight?.plus(maxTranslation.toInt()) ?: 0
+
+                            }
+                            HORIZONTAL -> {
+                                if (measuredWidth > 0) {
+                                    viewTreeObserver.removeOnGlobalLayoutListener(this)
+                                }
+                                val element = if (widgetList.isEmpty()) null else widgetList[0]
+                                minWidth = element?.measuredWidth?.plus(maxTranslation.toInt()) ?: 0
+                            }
+                        }
+
+                    }
+                })
+            }
         }
     }
 
-    override fun onClick(p0: View?) {
+    override fun onClick(view: View?) {
         if (isCollapsed) {
             transitionToEnd()
         } else {
@@ -229,7 +253,7 @@ class StackExpandableView : MotionLayout, View.OnClickListener {
 
     companion object {
         @IntDef(VERTICAL, HORIZONTAL)
-        @Retention(AnnotationRetention.SOURCE)
+        @Retention(SOURCE)
         annotation class Orientation
 
         const val VERTICAL = 0
