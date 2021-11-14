@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MotionScene xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <ConstraintSet android:id="@+id/startStackConstraintSet" />
+
+    <ConstraintSet android:id="@+id/endStackConstraintSet" />
+
+    <Transition
+        android:id="@+id/stackTransition"
+        app:constraintSetEnd="@id/endStackConstraintSet"
+        app:constraintSetStart="@id/startStackConstraintSet" />
+
+</MotionScene>
