@@ -1,4 +1,4 @@
-package it.fabiosassu.stackexpandableview
+package it.fabiosassu.demo
 
 import android.content.Context
 import android.util.AttributeSet

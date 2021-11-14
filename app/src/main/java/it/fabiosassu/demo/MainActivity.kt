@@ -1,16 +1,16 @@
-package it.fabiosassu.stackexpandableview
+package it.fabiosassu.demo
 
 import android.os.Bundle
 import android.util.TypedValue
 import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.ViewCompat
-import it.fabiosassu.stackexpandableview.databinding.ActivityMainBinding
+import it.fabiosassu.demo.databinding.ActivityMainBinding
 
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityMainBinding
+    private lateinit var binding: it.fabiosassu.demo.databinding.ActivityMainBinding
     var counter = STARTING_ITEM_NUMBER
     private val padding: Int
         get() = TypedValue.applyDimension(
