@@ -17,19 +17,6 @@ android {
         consumerProguardFiles "consumer-rules.pro"
     }
 
-    afterEvaluate {
-        publishing {
-            publications {
-                release(MavenPublication) {
-                    from components.release
-                    groupId = "it.fabiosassu"
-                    artifactId = 'stackexpandableview'
-                    version = "1.0.1"
-                }
-            }
-        }
-    }
-
     buildTypes {
         release {
             minifyEnabled false
