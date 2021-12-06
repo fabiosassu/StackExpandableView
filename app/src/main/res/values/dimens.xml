@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="default_spacing">8dp</dimen>
+    <dimen name="layout_item_mih_height">100dp</dimen>
+    <dimen name="layout_item_stroke_width">3dp</dimen>
+    <dimen name="item_corner_radius">10dp</dimen>
+</resources>
