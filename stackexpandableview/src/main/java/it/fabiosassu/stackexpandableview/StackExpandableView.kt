@@ -2,25 +2,27 @@ package it.fabiosassu.stackexpandableview
 
 import android.content.Context
 import android.util.AttributeSet
-import android.util.TypedValue
 import android.util.TypedValue.COMPLEX_UNIT_DIP
+import android.util.TypedValue.applyDimension
 import android.view.View
 import android.view.View.OnClickListener
 import android.view.ViewTreeObserver.OnGlobalLayoutListener
 import androidx.annotation.IntDef
 import androidx.constraintlayout.motion.widget.MotionLayout
 import androidx.constraintlayout.motion.widget.MotionScene
-import androidx.constraintlayout.motion.widget.TransitionBuilder
+import androidx.constraintlayout.motion.widget.MotionScene.Transition
+import androidx.constraintlayout.motion.widget.TransitionBuilder.buildTransition
 import androidx.constraintlayout.widget.ConstraintSet
 import androidx.constraintlayout.widget.ConstraintSet.*
 import androidx.core.view.ViewCompat
+import androidx.core.view.doOnLayout
 import kotlin.annotation.AnnotationRetention.SOURCE
 
 /**
  * A view that allows to perform an iOS notification group like animation.
  *
  * @author fabiosassu
- * @version 1.0.1
+ * @version 1.0.2
  */
 class StackExpandableView @JvmOverloads constructor(
     context: Context,
@@ -35,17 +37,17 @@ class StackExpandableView @JvmOverloads constructor(
             redraw()
         }
     private var widgetList = mutableListOf<View>()
-    private var shownElements: Int = 0
-    private var parallaxValue: Float = 0.toFloat()
-    private var animationDuration: Int = 0
+    private var shownElements = 0
+    private var parallaxValue = 0.toFloat()
+    private var animationDuration = 0
     private var isCollapsed = true
-    private val maxTranslation: Float
-        get() = TypedValue.applyDimension(
+    private val maxTranslation
+        get() = applyDimension(
             COMPLEX_UNIT_DIP,
             parallaxValue,
             resources.displayMetrics
         ) * shownElements
-    private var stackTransition: MotionScene.Transition? = null
+    private var stackTransition: Transition? = null
 
     init {
         init(attrs, defStyle)
@@ -77,13 +79,13 @@ class StackExpandableView @JvmOverloads constructor(
         scene.addTransition(stackTransition)
         scene.setTransition(stackTransition)
         setScene(scene)
-        redraw()
+        doOnLayout { redraw() }
     }
 
     /**
      * Create a basic transition programmatically.
      */
-    private fun createTransition(scene: MotionScene): MotionScene.Transition {
+    private fun createTransition(scene: MotionScene): Transition {
         val startSetId = ViewCompat.generateViewId()
         val startSet = ConstraintSet()
         startSet.clone(this)
@@ -91,7 +93,7 @@ class StackExpandableView @JvmOverloads constructor(
         val endSet = ConstraintSet()
         endSet.clone(this)
         val transitionId = ViewCompat.generateViewId()
-        return TransitionBuilder.buildTransition(
+        return buildTransition(
             scene,
             transitionId,
             startSetId, startSet,
@@ -104,11 +106,9 @@ class StackExpandableView @JvmOverloads constructor(
      * Notice that the given views must have an ID set.
      * @param views the [List] of [View]s we want to be set.
      */
-    fun setWidgets(views: List<View>?) {
-        views?.let {
-            widgetList = it.toMutableList()
-            redraw()
-        }
+    fun setWidgets(views: List<View>?) = views?.let {
+        widgetList = it.toMutableList()
+        redraw()
     }
 
     /**
@@ -116,11 +116,9 @@ class StackExpandableView @JvmOverloads constructor(
      *
      * @param view the [View] we want to be added
      */
-    fun addWidget(view: View?) {
-        view?.let {
-            widgetList.add(it)
-            redraw()
-        }
+    fun addWidget(view: View?) = view?.let {
+        widgetList.add(it)
+        redraw()
     }
 
     /**
@@ -128,12 +126,10 @@ class StackExpandableView @JvmOverloads constructor(
      *
      * @param view the [View] we want to be removed
      */
-    fun removeWidget(view: View?) {
-        view?.let {
-            val index = widgetList.indexOf<Any> { it.id == view.id }
-            widgetList.removeAt(index)
-            redraw()
-        }
+    fun removeWidget(view: View?) = view?.let {
+        val index = widgetList.indexOf<Any> { it.id == view.id }
+        widgetList.removeAt(index)
+        redraw()
     }
 
     private fun redraw() {
@@ -145,100 +141,108 @@ class StackExpandableView @JvmOverloads constructor(
         rebuildTransition()
     }
 
-    private fun rebuildTransition() {
-        stackTransition?.let { transition ->
-            transition.duration = animationDuration
-            if (widgetList.isNotEmpty()) {
-                val startConstraint = getConstraintSet(transition.startConstraintSetId)
-                startConstraint.clone(this)
-                val endConstraintSet = getConstraintSet(transition.endConstraintSetId)
-                endConstraintSet.clone(this)
-                widgetList.forEachIndexed { index, view ->
-                    // set start constraint set
-                    val translation = TypedValue.applyDimension(
-                        COMPLEX_UNIT_DIP,
-                        parallaxValue,
-                        resources.displayMetrics
-                    ) * index
-                    val scale = 1.toFloat() - (index.toFloat() / widgetList.size)
+    private fun rebuildTransition() = stackTransition?.let { transition ->
+        transition.duration = animationDuration
+        if (widgetList.isNotEmpty()) {
+            val startConstraint = getConstraintSet(transition.startConstraintSetId)
+            startConstraint.clone(this)
+            val endConstraintSet = getConstraintSet(transition.endConstraintSetId)
+            endConstraintSet.clone(this)
+            val (firstWidth, firstHeight) = widgetList.first()
+                .run { measuredWidth to measuredHeight }
+            widgetList.forEachIndexed { index, view ->
+                val translation = applyDimension(
+                    COMPLEX_UNIT_DIP,
+                    parallaxValue,
+                    resources.displayMetrics
+                ) * index
+                val scale = 1.toFloat() - (index.toFloat() / widgetList.size)
+                val viewId = view.id
+                // set start constraint set
+                startConstraint.apply {
                     when (orientation) {
                         VERTICAL -> {
-                            startConstraint.setScaleX(view.id, scale)
-                            startConstraint.setTranslationY(view.id, translation)
+                            setScaleX(viewId, scale)
+                            setTranslationY(viewId, translation)
                         }
                         HORIZONTAL -> {
-                            startConstraint.setScaleY(view.id, scale)
-                            startConstraint.setTranslationX(view.id, translation)
+                            setScaleY(viewId, scale)
+                            setTranslationX(viewId, translation)
                         }
                     }
-                    startConstraint.setAlpha(
-                        view.id,
-                        if (index >= shownElements) 0.toFloat() else 1.toFloat()
+
+                    val hidden = index >= shownElements
+                    if (index > 0) {
+                        // constrain both width and height of the views that are behind the first
+                        // one
+                        constrainHeight(viewId, firstHeight)
+                        constrainWidth(viewId, firstWidth)
+                    }
+                    setAlpha(viewId, if (hidden) 0.toFloat() else 1.toFloat())
+                }
+                // set end constraint set
+                endConstraintSet.apply {
+                    when (orientation) {
+                        VERTICAL -> {
+                            setTranslationY(viewId, 0.toFloat())
+                            setScaleX(viewId, 1.toFloat())
+                        }
+                        HORIZONTAL -> {
+                            setTranslationX(viewId, 0.toFloat())
+                            setScaleY(viewId, 1.toFloat())
+                        }
+                    }
+                    setAlpha(viewId, 1.toFloat())
+                }
+            }
+            val ids = widgetList.map { it.id }.toIntArray()
+            if (ids.size > 1) {
+                when (orientation) {
+                    VERTICAL -> endConstraintSet.createVerticalChain(
+                        PARENT_ID,
+                        TOP,
+                        PARENT_ID,
+                        BOTTOM,
+                        ids,
+                        null,
+                        CHAIN_PACKED
                     )
-                    // set end constraint set
-                    when (orientation) {
-                        VERTICAL -> {
-                            endConstraintSet.setTranslationY(view.id, 0.toFloat())
-                            endConstraintSet.setScaleX(view.id, 1.toFloat())
-                        }
-                        HORIZONTAL -> {
-                            endConstraintSet.setTranslationX(view.id, 0.toFloat())
-                            endConstraintSet.setScaleY(view.id, 1.toFloat())
-                        }
-                    }
-                    endConstraintSet.setAlpha(view.id, 1.toFloat())
+                    HORIZONTAL -> endConstraintSet.createHorizontalChainRtl(
+                        PARENT_ID,
+                        START,
+                        PARENT_ID,
+                        END,
+                        ids,
+                        null,
+                        CHAIN_PACKED
+                    )
                 }
-                val ids = widgetList.map { it.id }.toIntArray()
-                if (ids.size > 1) {
-                    when (orientation) {
-                        VERTICAL -> endConstraintSet.createVerticalChain(
-                            PARENT_ID,
-                            TOP,
-                            PARENT_ID,
-                            BOTTOM,
-                            ids,
-                            null,
-                            CHAIN_PACKED
-                        )
-                        HORIZONTAL -> {
-                            endConstraintSet.createHorizontalChainRtl(
-                                PARENT_ID,
-                                START,
-                                PARENT_ID,
-                                END,
-                                ids,
-                                null,
-                                CHAIN_PACKED
-                            )
-                        }
-                    }
-                }
-                setTransition(transition)
-                // set the min height
-                viewTreeObserver.addOnGlobalLayoutListener(object : OnGlobalLayoutListener {
+            }
+            setTransition(transition)
+            // set the min height
+            viewTreeObserver.addOnGlobalLayoutListener(
+                object : OnGlobalLayoutListener {
                     override fun onGlobalLayout() {
                         when (orientation) {
                             VERTICAL -> {
                                 if (measuredHeight > 0) {
                                     viewTreeObserver.removeOnGlobalLayoutListener(this)
                                 }
-                                val element = if (widgetList.isEmpty()) null else widgetList[0]
+                                val element = widgetList.firstOrNull()
                                 minHeight =
                                     element?.measuredHeight?.plus(maxTranslation.toInt()) ?: 0
-
                             }
                             HORIZONTAL -> {
                                 if (measuredWidth > 0) {
                                     viewTreeObserver.removeOnGlobalLayoutListener(this)
                                 }
-                                val element = if (widgetList.isEmpty()) null else widgetList[0]
+                                val element = widgetList.firstOrNull()
                                 minWidth = element?.measuredWidth?.plus(maxTranslation.toInt()) ?: 0
                             }
                         }
-
                     }
-                })
-            }
+                }
+            )
         }
     }
 

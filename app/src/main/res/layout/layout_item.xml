@@ -1,18 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@drawable/ic_background"
-    android:minHeight="100dp">
+    android:minHeight="@dimen/layout_item_mih_height">
 
-    <androidx.appcompat.widget.AppCompatTextView
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/text"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginStart="10dp"
-        android:layout_marginEnd="10dp"
-        android:gravity="center"
+        android:clickable="false"
+        android:insetLeft="@dimen/default_spacing"
+        android:insetTop="@dimen/default_spacing"
+        android:insetRight="@dimen/default_spacing"
+        android:insetBottom="@dimen/default_spacing"
+        android:textAllCaps="false"
+        app:cornerRadius="@dimen/item_corner_radius"
+        app:rippleColor="@android:color/transparent"
+        app:strokeColor="@color/item_stroke_color"
+        app:strokeWidth="@dimen/layout_item_stroke_width"
         tools:text="@tools:sample/lorem" />
 
 </androidx.appcompat.widget.LinearLayoutCompat>

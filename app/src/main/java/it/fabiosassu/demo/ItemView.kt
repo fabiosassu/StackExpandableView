@@ -3,40 +3,32 @@ package it.fabiosassu.demo
 import android.content.Context
 import android.util.AttributeSet
 import android.view.LayoutInflater
-import android.widget.TextView
 import androidx.appcompat.widget.LinearLayoutCompat
+import com.google.android.material.button.MaterialButton
 
 /**
  *
  */
-class ItemView : LinearLayoutCompat {
+class ItemView @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyle: Int = 0
+) : LinearLayoutCompat(context, attrs, defStyle) {
 
-    private var textView: TextView? = null
+    private var materialButton: MaterialButton? = null
     var text: String = ""
         set(value) {
             field = value
-            textView?.text = field
+            materialButton?.text = field
         }
 
-    constructor(context: Context) : super(context) {
-        init()
-    }
-
-    constructor(context: Context, attrs: AttributeSet) : super(context, attrs) {
-        init()
-    }
-
-    constructor(context: Context, attrs: AttributeSet, defStyle: Int) : super(
-        context,
-        attrs,
-        defStyle
-    ) {
+    init {
         init()
     }
 
     private fun init() {
         LayoutInflater.from(context).inflate(R.layout.layout_item, this, true)
-        textView = findViewById(R.id.text)
+        materialButton = findViewById(R.id.text)
     }
 
 }
