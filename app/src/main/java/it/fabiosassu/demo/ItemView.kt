@@ -2,8 +2,7 @@ package it.fabiosassu.demo
 
 import android.content.Context
 import android.util.AttributeSet
-import android.view.LayoutInflater
-import androidx.appcompat.widget.LinearLayoutCompat
+import android.widget.FrameLayout
 import com.google.android.material.button.MaterialButton
 
 /**
@@ -13,7 +12,7 @@ class ItemView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyle: Int = 0
-) : LinearLayoutCompat(context, attrs, defStyle) {
+) : FrameLayout(context, attrs, defStyle) {
 
     private var materialButton: MaterialButton? = null
     var text: String = ""
@@ -27,7 +26,7 @@ class ItemView @JvmOverloads constructor(
     }
 
     private fun init() {
-        LayoutInflater.from(context).inflate(R.layout.layout_item, this, true)
+        inflate(context, R.layout.layout_item, this)
         materialButton = findViewById(R.id.text)
     }
 

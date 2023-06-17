@@ -7,54 +7,16 @@
     android:padding="@dimen/default_spacing"
     tools:context=".MainActivity">
 
-    <!-- HORIZONTAL SAMPLE -->
-    <HorizontalScrollView
-        android:id="@+id/horizontalScrollView"
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/nav_host_fragment"
+        android:name="androidx.navigation.fragment.NavHostFragment"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:scrollbars="none"
-        app:layout_constraintBottom_toTopOf="@id/verticalScrollView"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
-
-        <it.fabiosassu.stackexpandableview.StackExpandableView
-            android:id="@+id/horizontalStack"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            app:orientation="horizontal" />
-
-    </HorizontalScrollView>
-
-    <!-- VERTICAL SAMPLE -->
-    <ScrollView
-        android:id="@+id/verticalScrollView"
-        android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="@dimen/default_spacing"
-        android:scrollbars="none"
+        app:defaultNavHost="true"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/horizontalScrollView">
-
-        <it.fabiosassu.stackexpandableview.StackExpandableView
-            android:id="@+id/verticalStack"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
-
-    </ScrollView>
-
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/addGroupBtn"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="@dimen/default_spacing"
-        android:layout_marginBottom="@dimen/default_spacing"
-        android:contentDescription="@string/add_button"
-        app:backgroundTint="@color/primaryColor"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:srcCompat="@android:drawable/ic_input_add" />
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:navGraph="@navigation/nav_graph" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
