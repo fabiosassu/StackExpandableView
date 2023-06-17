@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/fragmentStart">
+
+    <fragment
+        android:id="@+id/fragmentStart"
+        android:name="it.fabiosassu.demo.StartFragment"
+        android:label="SingleItemFragment"
+        tools:layout="@layout/fragment_single_item">
+
+        <action
+            android:id="@+id/action_fragmentStart_to_fragmentSingleItem"
+            app:destination="@id/fragmentSingleItem"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+
+        <action
+            android:id="@+id/action_fragmentStart_to_fragmentRecyclerView"
+            app:destination="@id/fragmentRecyclerView"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/fragmentSingleItem"
+        android:name="it.fabiosassu.demo.SingleItemFragment"
+        android:label="SingleItemFragment"
+        tools:layout="@layout/fragment_single_item" />
+
+    <fragment
+        android:id="@+id/fragmentRecyclerView"
+        android:name="it.fabiosassu.demo.RecyclerViewFragment"
+        android:label="RecyclerViewFragment"
+        tools:layout="@layout/fragment_recycler_view" />
+
+</navigation>

@@ -1,25 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+<com.google.android.material.button.MaterialButton xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/text"
+    style="@style/AppButton"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:minHeight="@dimen/layout_item_mih_height">
-
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/text"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:clickable="false"
-        android:insetLeft="@dimen/default_spacing"
-        android:insetTop="@dimen/default_spacing"
-        android:insetRight="@dimen/default_spacing"
-        android:insetBottom="@dimen/default_spacing"
-        android:textAllCaps="false"
-        app:cornerRadius="@dimen/item_corner_radius"
-        app:rippleColor="@android:color/transparent"
-        app:strokeColor="@color/item_stroke_color"
-        app:strokeWidth="@dimen/layout_item_stroke_width"
-        tools:text="@tools:sample/lorem" />
-
-</androidx.appcompat.widget.LinearLayoutCompat>
+    android:layout_height="match_parent"
+    android:clickable="false"
+    tools:text="@tools:sample/lorem" />

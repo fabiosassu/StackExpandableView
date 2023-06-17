@@ -1,53 +1,62 @@
 package it.fabiosassu.stackexpandableview
 
+import android.animation.Animator
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.content.Context
+import android.os.Parcelable
 import android.util.AttributeSet
+import android.util.SparseArray
 import android.util.TypedValue.COMPLEX_UNIT_DIP
 import android.util.TypedValue.applyDimension
 import android.view.View
-import android.view.View.OnClickListener
-import android.view.ViewTreeObserver.OnGlobalLayoutListener
+import android.view.View.*
+import android.view.ViewGroup
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import androidx.annotation.IntDef
-import androidx.constraintlayout.motion.widget.MotionLayout
-import androidx.constraintlayout.motion.widget.MotionScene
-import androidx.constraintlayout.motion.widget.MotionScene.Transition
-import androidx.constraintlayout.motion.widget.TransitionBuilder.buildTransition
-import androidx.constraintlayout.widget.ConstraintSet
-import androidx.constraintlayout.widget.ConstraintSet.*
-import androidx.core.view.ViewCompat
-import androidx.core.view.doOnLayout
-import kotlin.annotation.AnnotationRetention.SOURCE
+import androidx.core.animation.addListener
+import androidx.core.view.*
+import androidx.core.widget.NestedScrollView
+import kotlinx.parcelize.Parcelize
+import kotlinx.parcelize.RawValue
+
+/**
+ * A typealias that represents the callback that notifies the caller about expansion/collapse of the
+ * [StackExpandableView].
+ */
+typealias OnExpansionChangedListener = (StackExpandableView, Boolean) -> Unit
 
 /**
  * A view that allows to perform an iOS notification group like animation.
  *
  * @author fabiosassu
- * @version 1.0.2
+ * @version 1.0.3
  */
 class StackExpandableView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyle: Int = 0
-) : MotionLayout(context, attrs, defStyle), OnClickListener {
+) : FrameLayout(context, attrs, defStyle), OnClickListener {
 
     @Orientation
-    var orientation = VERTICAL
-        set(value) {
-            field = value
-            redraw()
-        }
+    private var orientation = VERTICAL
     private var widgetList = mutableListOf<View>()
     private var shownElements = 0
     private var parallaxValue = 0.toFloat()
     private var animationDuration = 0
-    private var isCollapsed = true
-    private val maxTranslation
-        get() = applyDimension(
-            COMPLEX_UNIT_DIP,
-            parallaxValue,
-            resources.displayMetrics
-        ) * shownElements
-    private var stackTransition: Transition? = null
+    private var expanded = false
+    private var animator: Animator? = null
+    private var stackList: FrameLayout? = null
+    private var originalSizes = SparseArray<Pair<Int, Int>>()
+
+    /**
+     * This listener is meant to be used to be notified about expansion/collapse of the [StackExpandableView].
+     */
+    var onExpansionChangedListener: OnExpansionChangedListener? = null
 
     init {
         init(attrs, defStyle)
@@ -55,11 +64,15 @@ class StackExpandableView @JvmOverloads constructor(
 
     private fun init(attrs: AttributeSet?, defStyle: Int) {
         // Load attributes
-        val a = context.obtainStyledAttributes(attrs, R.styleable.StackExpandableView, defStyle, 0)
+        val a =
+            context.obtainStyledAttributes(attrs, R.styleable.StackExpandableView, defStyle, 0)
         shownElements =
             a.getInt(R.styleable.StackExpandableView_shownElements, DEFAULT_ITEMS_NUMBER)
         parallaxValue =
-            a.getDimension(R.styleable.StackExpandableView_parallaxOffset, DEFAULT_PARALLAX_VALUE)
+            a.getDimension(
+                R.styleable.StackExpandableView_parallaxOffset,
+                DEFAULT_PARALLAX_VALUE
+            )
         animationDuration = a.getInteger(
             R.styleable.StackExpandableView_animationDuration,
             DEFAULT_ANIMATION_DURATION
@@ -69,46 +82,41 @@ class StackExpandableView @JvmOverloads constructor(
             VERTICAL
         )
 
+        when (orientation) {
+            VERTICAL -> addView(
+                NestedScrollView(context, attrs, defStyle).apply {
+                    addView(generateStackList(MATCH_PARENT, WRAP_CONTENT))
+                }
+            )
+
+            HORIZONTAL -> addView(
+                HorizontalScrollView(context, attrs, defStyle).apply {
+                    addView(generateStackList(WRAP_CONTENT, WRAP_CONTENT))
+                }
+            )
+        }
+
         a.recycle()
     }
 
-    override fun onFinishInflate() {
-        super.onFinishInflate()
-        val scene = MotionScene(this)
-        stackTransition = createTransition(scene)
-        scene.addTransition(stackTransition)
-        scene.setTransition(stackTransition)
-        setScene(scene)
-        doOnLayout { redraw() }
-    }
-
-    /**
-     * Create a basic transition programmatically.
-     */
-    private fun createTransition(scene: MotionScene): Transition {
-        val startSetId = ViewCompat.generateViewId()
-        val startSet = ConstraintSet()
-        startSet.clone(this)
-        val endSetId = ViewCompat.generateViewId()
-        val endSet = ConstraintSet()
-        endSet.clone(this)
-        val transitionId = ViewCompat.generateViewId()
-        return buildTransition(
-            scene,
-            transitionId,
-            startSetId, startSet,
-            endSetId, endSet
-        )
-    }
+    private fun generateStackList(
+        width: Int,
+        height: Int
+    ) = FrameLayout(context).apply {
+        layoutParams = LayoutParams(width, height)
+    }.also { stackList = it }
 
     /**
      * Allows to set a new [List] to this widget.
      * Notice that the given views must have an ID set.
+     *
      * @param views the [List] of [View]s we want to be set.
      */
     fun setWidgets(views: List<View>?) = views?.let {
         widgetList = it.toMutableList()
-        redraw()
+        redraw {
+            setOriginalSizes()
+        }
     }
 
     /**
@@ -117,8 +125,12 @@ class StackExpandableView @JvmOverloads constructor(
      * @param view the [View] we want to be added
      */
     fun addWidget(view: View?) = view?.let {
+        // add new view as transparent in order to avoid flashes
+        it.alpha = 0F
         widgetList.add(it)
-        redraw()
+        redraw {
+            originalSizes.put(it.id, it.measuredWidth to it.measuredHeight)
+        }
     }
 
     /**
@@ -129,135 +141,415 @@ class StackExpandableView @JvmOverloads constructor(
     fun removeWidget(view: View?) = view?.let {
         val index = widgetList.indexOf<Any> { it.id == view.id }
         widgetList.removeAt(index)
+        redraw {
+            originalSizes.remove(view.id)
+        }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
         redraw()
     }
 
-    private fun redraw() {
+    private fun redraw(
+        func: (FrameLayout.() -> Unit)? = null
+    ) = stackList?.apply {
         removeAllViews()
         widgetList.reversed().forEach {
-            it.setOnClickListener(this)
+            val parent = it.parent
+            if (parent is ViewGroup) {
+                parent.removeView(it)
+            }
+            it.setOnClickListener(this@StackExpandableView)
             addView(it)
         }
-        rebuildTransition()
+        post {
+            func?.invoke(this)
+            setupViews()
+        }
     }
 
-    private fun rebuildTransition() = stackTransition?.let { transition ->
-        transition.duration = animationDuration
-        if (widgetList.isNotEmpty()) {
-            val startConstraint = getConstraintSet(transition.startConstraintSetId)
-            startConstraint.clone(this)
-            val endConstraintSet = getConstraintSet(transition.endConstraintSetId)
-            endConstraintSet.clone(this)
-            val (firstWidth, firstHeight) = widgetList.first()
-                .run { measuredWidth to measuredHeight }
-            widgetList.forEachIndexed { index, view ->
-                val translation = applyDimension(
-                    COMPLEX_UNIT_DIP,
-                    parallaxValue,
-                    resources.displayMetrics
-                ) * index
-                val scale = 1.toFloat() - (index.toFloat() / widgetList.size)
-                val viewId = view.id
-                // set start constraint set
-                startConstraint.apply {
-                    when (orientation) {
-                        VERTICAL -> {
-                            setScaleX(viewId, scale)
-                            setTranslationY(viewId, translation)
-                        }
-                        HORIZONTAL -> {
-                            setScaleY(viewId, scale)
-                            setTranslationX(viewId, translation)
-                        }
-                    }
+    private fun FrameLayout.setOriginalSizes() {
+        originalSizes.clear()
+        getAddedViews().forEach { view ->
+            originalSizes.put(view.id, view.measuredWidth to view.measuredHeight)
+        }
+    }
 
-                    val hidden = index >= shownElements
-                    if (index > 0) {
-                        // constrain both width and height of the views that are behind the first
-                        // one
-                        constrainHeight(viewId, firstHeight)
-                        constrainWidth(viewId, firstWidth)
-                    }
-                    setAlpha(viewId, if (hidden) 0.toFloat() else 1.toFloat())
+    private fun FrameLayout.setupViews() {
+        if (childCount > 0) {
+            var totalSize = 0
+            var firstView: View? = null
+            getAddedViews().forEachIndexed { index, view ->
+                if (index == 0) {
+                    firstView = view
                 }
-                // set end constraint set
-                endConstraintSet.apply {
-                    when (orientation) {
-                        VERTICAL -> {
-                            setTranslationY(viewId, 0.toFloat())
-                            setScaleX(viewId, 1.toFloat())
-                        }
-                        HORIZONTAL -> {
-                            setTranslationX(viewId, 0.toFloat())
-                            setScaleY(viewId, 1.toFloat())
-                        }
-                    }
-                    setAlpha(viewId, 1.toFloat())
-                }
-            }
-            val ids = widgetList.map { it.id }.toIntArray()
-            if (ids.size > 1) {
-                when (orientation) {
-                    VERTICAL -> endConstraintSet.createVerticalChain(
-                        PARENT_ID,
-                        TOP,
-                        PARENT_ID,
-                        BOTTOM,
-                        ids,
-                        null,
-                        CHAIN_PACKED
-                    )
-                    HORIZONTAL -> endConstraintSet.createHorizontalChainRtl(
-                        PARENT_ID,
-                        START,
-                        PARENT_ID,
-                        END,
-                        ids,
-                        null,
-                        CHAIN_PACKED
-                    )
-                }
-            }
-            setTransition(transition)
-            // set the min height
-            viewTreeObserver.addOnGlobalLayoutListener(
-                object : OnGlobalLayoutListener {
-                    override fun onGlobalLayout() {
+                view.apply {
+                    if (expanded) {
+                        val (originalWidth, originalHeight) = originalSizes[view.id] ?: return
+                        alpha = 1F
+                        isVisible = true
                         when (orientation) {
                             VERTICAL -> {
-                                if (measuredHeight > 0) {
-                                    viewTreeObserver.removeOnGlobalLayoutListener(this)
+                                scaleX = 1F
+                                updateLayoutParams<LayoutParams> {
+                                    topMargin = totalSize
                                 }
-                                val element = widgetList.firstOrNull()
-                                minHeight =
-                                    element?.measuredHeight?.plus(maxTranslation.toInt()) ?: 0
+                                totalSize += originalHeight
                             }
+
                             HORIZONTAL -> {
-                                if (measuredWidth > 0) {
-                                    viewTreeObserver.removeOnGlobalLayoutListener(this)
+                                scaleY = 1F
+                                updateLayoutParams<LayoutParams> {
+                                    marginStart = totalSize
                                 }
-                                val element = widgetList.firstOrNull()
-                                minWidth = element?.measuredWidth?.plus(maxTranslation.toInt()) ?: 0
+                                totalSize += originalWidth
+                            }
+                        }
+                        updateLayoutParams<LayoutParams> {
+                            if (width != originalWidth) {
+                                width = originalWidth
+                            }
+                            if (height != originalHeight) {
+                                height = originalHeight
+                            }
+                        }
+                    } else {
+                        val translation = getTranslation(index)
+                        val scale = 1.toFloat() - (index.toFloat() / widgetList.size)
+                        val hidden = index >= shownElements
+                        alpha = if (hidden) 0.toFloat() else 1.toFloat()
+                        isVisible = !hidden
+                        when (orientation) {
+                            VERTICAL -> {
+                                scaleX = scale
+                                updateLayoutParams<LayoutParams> {
+                                    topMargin = translation.toInt()
+                                }
+                            }
+
+                            HORIZONTAL -> {
+                                scaleY = scale
+                                updateLayoutParams<LayoutParams> {
+                                    marginStart = translation.toInt()
+                                }
+                            }
+                        }
+                        if (isVisible) {
+                            updateLayoutParams<LayoutParams> {
+                                firstView?.measuredWidth?.let {
+                                    width = it
+                                }
+                                firstView?.measuredHeight?.let {
+                                    height = it
+                                }
                             }
                         }
                     }
                 }
-            )
+            }
         }
     }
 
-    override fun onClick(view: View?) {
-        if (isCollapsed) {
-            transitionToEnd()
-        } else {
-            transitionToStart()
+    private fun FrameLayout.getAddedViews() = mutableListOf<View>().apply {
+        for (index in 0 until childCount) {
+            add(getChildAt(index))
         }
-        isCollapsed = !isCollapsed
+    }.asReversed()
+
+    private fun getTranslation(index: Int) = applyDimension(
+        COMPLEX_UNIT_DIP,
+        parallaxValue,
+        resources.displayMetrics
+    ) * index
+
+    override fun onClick(view: View?) {
+        if (expanded) {
+            collapse(true)
+        } else {
+            expand(true)
+        }
+    }
+
+    /**
+     * This method allows to collapse the [StackExpandableView].
+     *
+     * @param animated a [Boolean] parameter that is used to determine whether the collapse should
+     * be animated or not.
+     * @param ping a [Boolean] parameter that is used to determine whether we want the
+     * [OnExpansionChangedListener] to be triggered or not after the collapse ends. By default this
+     * is true.
+     */
+    fun collapse(
+        animated: Boolean,
+        ping: Boolean = true
+    ) {
+        if (!isEnabled || !expanded) {
+            return
+        }
+        if (animated) {
+            val animators = mutableListOf<Animator>()
+            stackList?.apply {
+                if (childCount > 0) {
+                    var firstViewId = 0
+                    getAddedViews().forEachIndexed { index, view ->
+                        if (index == 0) {
+                            firstViewId = view.id
+                        }
+                        val translation = getTranslation(index)
+                        val hidden = index >= shownElements
+                        val scaleRatio = 1.toFloat() - (index.toFloat() / widgetList.size)
+                        val alpha = ObjectAnimator.ofFloat(
+                            view,
+                            "alpha",
+                            if (hidden) 0.toFloat() else 1.toFloat()
+                        ).apply {
+                            addListener(
+                                onEnd = {
+                                    if (!expanded) {
+                                        view.isVisible = !hidden
+                                    }
+                                },
+                                onStart = {
+                                    view.isVisible = true
+                                }
+                            )
+                        }
+                        val propertyName = if (orientation == VERTICAL) "scaleX" else "scaleY"
+                        val scale = ObjectAnimator.ofFloat(view, propertyName, scaleRatio)
+                        val viewMargin =
+                            if (orientation == VERTICAL) view.marginTop else view.marginStart
+                        val margin =
+                            ValueAnimator.ofInt(viewMargin, translation.toInt()).apply {
+                                addUpdateListener {
+                                    val animatedMargin = animatedValue as Int
+                                    view.updateLayoutParams<LayoutParams> {
+                                        if (orientation == VERTICAL) {
+                                            topMargin = animatedMargin
+                                        } else {
+                                            marginStart = animatedMargin
+                                        }
+                                    }
+                                }
+                            }
+
+                        val (firstWidth, firstHeight) = originalSizes[firstViewId] ?: return
+                        val width =
+                            ValueAnimator.ofInt(view.measuredWidth, firstWidth).apply {
+                                addUpdateListener {
+                                    val animatedSide = animatedValue as Int
+                                    view.updateLayoutParams<LayoutParams> {
+                                        width = animatedSide
+                                    }
+                                }
+                            }
+
+                        val height =
+                            ValueAnimator.ofInt(view.measuredHeight, firstHeight).apply {
+                                addUpdateListener {
+                                    val animatedSide = animatedValue as Int
+                                    view.updateLayoutParams<LayoutParams> {
+                                        height = animatedSide
+                                    }
+                                }
+                            }.apply {
+                                addListener(
+                                    onEnd = {
+                                        view.post {
+                                            view.setLayerType(LAYER_TYPE_NONE, null)
+                                        }
+                                    },
+                                    onStart = { view.setLayerType(LAYER_TYPE_HARDWARE, null) },
+                                    onCancel = { view.setLayerType(LAYER_TYPE_NONE, null) }
+                                )
+                            }
+
+                        animators.apply {
+                            add(alpha)
+                            add(scale)
+                            add(margin)
+                            if (!hidden) {
+                                add(width)
+                                add(height)
+                            }
+                        }
+                    }
+                }
+            }
+            animator = AnimatorSet().apply {
+                addListener(
+                    onEnd = {
+                        animator = null
+                        if (ping) {
+                            pingListener()
+                        }
+                    }
+                )
+                playTogether(animators)
+                duration = animationDuration.toLong()
+                start()
+            }
+        } else {
+            redraw()
+            if (ping) {
+                pingListener()
+            }
+        }
+        expanded = false
+    }
+
+    /**
+     * This method allows to expand the [StackExpandableView].
+     *
+     * @param animated a [Boolean] parameter that is used to determine whether the expansion should
+     * be animated or not.
+     * @param ping a [Boolean] parameter that is used to determine whether we want the
+     * [OnExpansionChangedListener] to be triggered or not after the expansion ends. By default this
+     * is true.
+     */
+    fun expand(
+        animated: Boolean,
+        ping: Boolean = true
+    ) {
+        if (!isEnabled || expanded) {
+            return
+        }
+        if (animated) {
+            val animators = mutableListOf<Animator>()
+            stackList?.apply {
+                if (childCount > 0) {
+                    var totalSize = 0
+                    getAddedViews().forEachIndexed { index, view ->
+                        val hidden = index >= shownElements
+                        val (originalWidth, originalHeight) = originalSizes[view.id] ?: return
+                        val alpha = ObjectAnimator.ofFloat(
+                            view,
+                            "alpha",
+                            1.toFloat()
+                        ).apply {
+                            addListener(
+                                onStart = {
+                                    view.isVisible = true
+                                }
+                            )
+                        }
+                        val propertyName = if (orientation == VERTICAL) "scaleX" else "scaleY"
+                        val scale = ObjectAnimator.ofFloat(view, propertyName, 1F)
+                        val viewMargin =
+                            if (orientation == VERTICAL) view.marginTop else view.marginStart
+                        val margin =
+                            ValueAnimator.ofInt(viewMargin, totalSize)
+                                .apply {
+                                    addUpdateListener {
+                                        val animatedMargin = animatedValue as Int
+                                        view.updateLayoutParams<LayoutParams> {
+                                            if (orientation == VERTICAL) {
+                                                topMargin = animatedMargin
+                                            } else {
+                                                marginStart = animatedMargin
+                                            }
+                                        }
+                                    }
+                                }
+
+                        val width =
+                            ValueAnimator.ofInt(view.measuredWidth, originalWidth).apply {
+                                addUpdateListener {
+                                    val animatedSide = animatedValue as Int
+                                    view.updateLayoutParams<LayoutParams> {
+                                        width = animatedSide
+                                    }
+                                }
+                            }
+
+                        val height =
+                            ValueAnimator.ofInt(view.measuredHeight, originalHeight).apply {
+                                addUpdateListener {
+                                    val animatedSide = animatedValue as Int
+                                    view.updateLayoutParams<LayoutParams> {
+                                        height = animatedSide
+                                    }
+                                }
+                            }.apply {
+                                addListener(
+                                    onEnd = {
+                                        view.post {
+                                            view.setLayerType(LAYER_TYPE_NONE, null)
+                                        }
+                                    },
+                                    onStart = { view.setLayerType(LAYER_TYPE_HARDWARE, null) },
+                                    onCancel = { view.setLayerType(LAYER_TYPE_NONE, null) }
+                                )
+                            }
+
+                        animators.apply {
+                            add(alpha)
+                            add(scale)
+                            add(margin)
+                            if (!hidden) {
+                                add(width)
+                                add(height)
+                            }
+                        }
+
+                        totalSize += if (orientation == VERTICAL) originalHeight else originalWidth
+                    }
+                }
+            }
+            animator = AnimatorSet().apply {
+                addListener(
+                    onEnd = {
+                        animator = null
+                        if (ping) {
+                            pingListener()
+                        }
+                    },
+                )
+                playTogether(animators)
+                duration = animationDuration.toLong()
+                start()
+            }
+        } else {
+            redraw()
+            if (ping) {
+                pingListener()
+            }
+        }
+        expanded = true
+    }
+
+    private fun pingListener() = onExpansionChangedListener?.invoke(this, expanded)
+
+    override fun onSaveInstanceState() = SavedState(
+        super.onSaveInstanceState(),
+        orientation,
+        widgetList,
+        shownElements,
+        parallaxValue,
+        animationDuration,
+        expanded,
+        originalSizes
+    )
+
+    override fun onRestoreInstanceState(state: Parcelable?) {
+        if (state !is SavedState) {
+            super.onRestoreInstanceState(state)
+            return
+        }
+        super.onRestoreInstanceState(state.superState)
+        orientation = state.orientation
+        widgetList = state.widgetList
+        shownElements = state.shownElements
+        parallaxValue = state.parallaxValue
+        animationDuration = state.animationDuration
+        expanded = state.expanded
+        originalSizes = state.originalSizes
+        requestLayout()
     }
 
     companion object {
         @IntDef(VERTICAL, HORIZONTAL)
-        @Retention(SOURCE)
+        @Retention(AnnotationRetention.SOURCE)
         annotation class Orientation
 
         const val VERTICAL = 0
@@ -267,4 +559,15 @@ class StackExpandableView @JvmOverloads constructor(
         const val DEFAULT_ANIMATION_DURATION = 300
     }
 
+    @Parcelize
+    data class SavedState(
+        val state: Parcelable?,
+        val orientation: Int,
+        val widgetList: @RawValue MutableList<View>,
+        val shownElements: Int,
+        val parallaxValue: Float,
+        val animationDuration: Int,
+        val expanded: Boolean,
+        val originalSizes: SparseArray<Pair<Int, Int>>
+    ) : BaseSavedState(state)
 }
